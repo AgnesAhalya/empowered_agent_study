@@ -1,4 +1,8 @@
-let problemId = "palindrome";
+let PROBLEM_IDS = ["palindrome"];
+let currentProblemIndex = 0;
+let problemId = PROBLEM_IDS[currentProblemIndex];
+let activeModel = null;
+
 let starterCode = "";
 let editor = null;
 let lastSelectedOption = null;
@@ -14,6 +18,159 @@ let localOptionCounts = {
   code_suggestion: 0,
   direct_code: 0,
 };
+
+function getCurrentProblemId() {
+  return PROBLEM_IDS[currentProblemIndex] || "palindrome";
+}
+
+async function loadActiveModel() {
+  try {
+    const response = await fetch("/health", { cache: "no-store" });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data = await response.json();
+    activeModel = data.model || null;
+  } catch (error) {
+    console.warn("Could not load active model", error);
+  }
+}
+
+async function loadProblemIds() {
+  try {
+    const response = await fetch("/problems", { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error("Could not load problems list");
+    }
+
+    const data = await response.json();
+    const ids = (data.problems || [])
+      .map((problem) => problem.id)
+      .filter(Boolean);
+
+    if (ids.length > 0) {
+      PROBLEM_IDS = ids;
+      currentProblemIndex = 0;
+      problemId = getCurrentProblemId();
+    }
+  } catch (error) {
+    console.warn("Using fallback problem list", error);
+  }
+}
+
+function clearBoxes() {
+  const helperResponse = document.getElementById("helperResponse");
+  const testResults = document.getElementById("testResults");
+
+  if (helperResponse) {
+    helperResponse.textContent = "";
+  }
+
+  if (testResults) {
+    testResults.textContent = "";
+  }
+}
+
+function setCurrentProblemByIndex(index) {
+  if (index < 0 || index >= PROBLEM_IDS.length) {
+    return;
+  }
+
+  currentProblemIndex = index;
+  problemId = getCurrentProblemId();
+
+  lastSelectedOption = null;
+  showSelectedOption(null);
+  clearBoxes();
+  loadProblem();
+}
+
+function setCurrentProblemById(selectedProblemId) {
+  const index = PROBLEM_IDS.indexOf(selectedProblemId);
+
+  if (index === -1) {
+    return;
+  }
+
+  setCurrentProblemByIndex(index);
+}
+
+function nextProblem() {
+  if (currentProblemIndex < PROBLEM_IDS.length - 1) {
+    setCurrentProblemByIndex(currentProblemIndex + 1);
+  }
+}
+
+function previousProblem() {
+  if (currentProblemIndex > 0) {
+    setCurrentProblemByIndex(currentProblemIndex - 1);
+  }
+}
+
+function updateProblemControls() {
+  const problemSelect =
+    document.getElementById("problemSelect") ||
+    document.getElementById("problemSelector");
+
+  if (problemSelect) {
+    problemSelect.value = getCurrentProblemId();
+  }
+
+  const problemCounter = document.getElementById("problemCounter");
+
+  if (problemCounter) {
+    problemCounter.textContent =
+      `Problem ${currentProblemIndex + 1} of ${PROBLEM_IDS.length}`;
+  }
+
+  const previousButton = document.getElementById("previousProblemBtn");
+  const nextButton = document.getElementById("nextProblemBtn");
+
+  if (previousButton) {
+    previousButton.disabled = currentProblemIndex === 0;
+  }
+
+  if (nextButton) {
+    nextButton.disabled = currentProblemIndex === PROBLEM_IDS.length - 1;
+  }
+}
+
+function setupProblemControls() {
+  const problemSelect =
+    document.getElementById("problemSelect") ||
+    document.getElementById("problemSelector");
+
+  if (problemSelect) {
+    problemSelect.innerHTML = "";
+
+    PROBLEM_IDS.forEach((id, index) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = `${index + 1}. ${id}`;
+      problemSelect.appendChild(option);
+    });
+
+    problemSelect.addEventListener("change", function () {
+      setCurrentProblemById(problemSelect.value);
+    });
+  }
+
+  const previousButton = document.getElementById("previousProblemBtn");
+  const nextButton = document.getElementById("nextProblemBtn");
+
+  if (previousButton) {
+    previousButton.addEventListener("click", previousProblem);
+  }
+
+  if (nextButton) {
+    nextButton.addEventListener("click", nextProblem);
+  }
+
+  updateProblemControls();
+}
 
 function getCode() {
   return editor ? editor.getValue() : "";
@@ -76,7 +233,8 @@ function canonicalOption(value) {
     key.startsWith("3 ") ||
     key.includes("direct code") ||
     key.includes("full code") ||
-    key.includes("complete code")
+    key.includes("complete code") ||
+    (key.includes("direct") && key.includes("code"))
   ) {
     return "direct_code";
   }
@@ -164,6 +322,11 @@ function showCounts(optionCounts, optionTotal = null) {
   }
 
   metricsBox.textContent =
+    `Stats filters:\n` +
+    `Participant: ${getParticipantId()}\n` +
+    `Problem: ${getCurrentProblemId()}\n` +
+    `Condition: ${getMethod()}\n` +
+    `Model: ${activeModel || "all/unknown"}\n\n` +
     `Total helper requests: ${total}\n` +
     `Concept suggestion: ${counts.concept_suggestion} (${percentages.concept_suggestion}%)\n` +
     `Code suggestion: ${counts.code_suggestion} (${percentages.code_suggestion}%)\n` +
@@ -211,46 +374,73 @@ function cleanSuggestionText(text) {
 }
 
 async function loadProblem() {
-  const response = await fetch(`/problems/${problemId}`, {
-    cache: "no-store",
-  });
+  const activeProblemId = getCurrentProblemId();
 
-  const problem = await response.json();
+  try {
+    const response = await fetch(`/problems/${activeProblemId}`, {
+      cache: "no-store",
+    });
 
-  document.getElementById("problemTitle").textContent = problem.title;
-  document.getElementById("problemDescription").textContent = problem.description;
+    if (!response.ok) {
+      throw new Error(`Problem not found: ${activeProblemId}`);
+    }
 
-  starterCode = problem.starter_code;
-  setCode(starterCode);
+    const problem = await response.json();
 
-  lastSelectedOption = null;
-  showSelectedOption(null);
+    document.getElementById("problemTitle").textContent = problem.title;
+    document.getElementById("problemDescription").textContent =
+      problem.description;
 
-  await refreshOptionCounts();
+    starterCode = problem.starter_code || "";
+    setCode(starterCode);
+
+    lastSelectedOption = null;
+    showSelectedOption(null);
+
+    localOptionCounts = {
+      concept_suggestion: 0,
+      code_suggestion: 0,
+      direct_code: 0,
+    };
+
+    updateProblemControls();
+    await refreshOptionCounts();
+  } catch (error) {
+    document.getElementById("problemTitle").textContent = "Problem loading failed";
+    document.getElementById("problemDescription").textContent = error.message;
+    setCode("");
+    showLocalCounts();
+  }
 }
 
 function resetCode() {
   setCode(starterCode);
 
   lastSelectedOption = null;
-
-  document.getElementById("helperResponse").textContent = "";
-  document.getElementById("testResults").textContent = "";
-
+  clearBoxes();
   showSelectedOption(null);
   refreshOptionCounts();
 }
 
 async function refreshOptionCounts() {
   const participantId = getParticipantId();
+  const activeProblemId = getCurrentProblemId();
+  const method = getMethod();
+
+  const params = new URLSearchParams({
+    participant_id: participantId,
+    problem_id: activeProblemId,
+    method: method,
+  });
+
+  if (activeModel) {
+    params.set("model", activeModel);
+  }
 
   try {
-    const response = await fetch(
-      `/stats/options?participant_id=${encodeURIComponent(participantId)}&problem_id=${encodeURIComponent(problemId)}`,
-      {
-        cache: "no-store",
-      }
-    );
+    const response = await fetch(`/stats/options?${params.toString()}`, {
+      cache: "no-store",
+    });
 
     if (!response.ok) {
       showLocalCounts();
@@ -261,14 +451,15 @@ async function refreshOptionCounts() {
 
     const counts = normalizeCounts(data.option_counts || {});
     const totalFromCounts =
-      counts.concept_suggestion + counts.code_suggestion + counts.direct_code;
+      counts.concept_suggestion +
+      counts.code_suggestion +
+      counts.direct_code;
 
     const total = Number.isFinite(Number(data.option_total))
       ? Number(data.option_total)
       : totalFromCounts;
 
     localOptionCounts = counts;
-
     showCounts(counts, total);
   } catch (error) {
     console.error("Could not refresh option counts", error);
@@ -280,6 +471,7 @@ async function askHelper() {
   const prefix = getCode();
   const method = getMethod();
   const participantId = getParticipantId();
+  const activeProblemId = getCurrentProblemId();
 
   document.getElementById("helperResponse").textContent = "Thinking...";
 
@@ -292,7 +484,7 @@ async function askHelper() {
       body: JSON.stringify({
         prefix: prefix,
         method: method,
-        problem_id: problemId,
+        problem_id: activeProblemId,
         participant_id: participantId,
       }),
     });
@@ -305,6 +497,10 @@ async function askHelper() {
       return;
     }
 
+    if (data.model) {
+      activeModel = data.model;
+    }
+
     const selectedOption =
       data.selected_option ||
       data.option_chosen ||
@@ -313,7 +509,6 @@ async function askHelper() {
       data.model_choice;
 
     lastSelectedOption = canonicalOption(selectedOption);
-
     showSelectedOption(lastSelectedOption);
 
     const suggestion = cleanSuggestionText(data.suggestion);
@@ -332,7 +527,9 @@ async function askHelper() {
     if (data.option_counts || data.option_total !== undefined) {
       const counts = normalizeCounts(data.option_counts || {});
       const totalFromCounts =
-        counts.concept_suggestion + counts.code_suggestion + counts.direct_code;
+        counts.concept_suggestion +
+        counts.code_suggestion +
+        counts.direct_code;
 
       const total = Number.isFinite(Number(data.option_total))
         ? Number(data.option_total)
@@ -354,6 +551,7 @@ async function runTests() {
   const code = getCode();
   const method = getMethod();
   const participantId = getParticipantId();
+  const activeProblemId = getCurrentProblemId();
 
   const response = await fetch("/submit", {
     method: "POST",
@@ -361,7 +559,7 @@ async function runTests() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      problem_id: problemId,
+      problem_id: activeProblemId,
       participant_id: participantId,
       method: method,
       selected_option: lastSelectedOption,
@@ -376,7 +574,15 @@ async function runTests() {
     null,
     2
   );
+
+  await refreshOptionCounts();
 }
+
+window.askHelper = askHelper;
+window.runTests = runTests;
+window.resetCode = resetCode;
+window.nextProblem = nextProblem;
+window.previousProblem = previousProblem;
 
 require.config({
   paths: {
@@ -384,7 +590,7 @@ require.config({
   },
 });
 
-require(["vs/editor/editor.main"], function () {
+require(["vs/editor/editor.main"], async function () {
   editor = monaco.editor.create(document.getElementById("editor"), {
     value: "",
     language: "python",
@@ -402,10 +608,18 @@ require(["vs/editor/editor.main"], function () {
   });
 
   const participantInput = document.getElementById("participantId");
+  const methodSelect = document.getElementById("method");
 
   if (participantInput) {
     participantInput.addEventListener("input", refreshOptionCounts);
   }
 
+  if (methodSelect) {
+    methodSelect.addEventListener("change", refreshOptionCounts);
+  }
+
+  await loadActiveModel();
+  await loadProblemIds();
+  setupProblemControls();
   loadProblem();
 });

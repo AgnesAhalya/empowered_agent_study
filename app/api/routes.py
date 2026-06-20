@@ -35,15 +35,21 @@ def health():
 def option_stats(
     participant_id: str | None = None,
     problem_id: str | None = None,
+    method: str | None = None,
+    model: str | None = None,
 ):
     usage = option_usage_summary(
         participant_id=participant_id,
         problem_id=problem_id,
+        method=method,
+        model=model,
     )
 
     return {
         "participant_id": participant_id,
         "problem_id": problem_id,
+        "method": method,
+        "model": model,
         "option_counts": usage["counts"],
         "option_percentages": usage["percentages"],
         "option_total": usage["total"],
@@ -123,6 +129,8 @@ def complete(req: CompletionRequest):
     usage = option_usage_summary(
         participant_id=req.participant_id,
         problem_id=req.problem_id,
+        method=req.method,
+        model=OPENROUTER_MODEL,
     )
 
     return CompletionResponse(

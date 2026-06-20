@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Soft-Empower Coding Study</title>
-  <link rel="stylesheet" href="/frontend/style.css?v=20260620_fixed">
+  <link rel="stylesheet" href="/frontend/style.css?v=20260620_model_problem_stats">
 </head>
 <body>
   <div class="app-shell">
@@ -19,6 +19,13 @@
         <option value="empowered_selector">Empowered LLM selector</option>
       </select>
       <p class="hint-text">The model chooses: concept suggestion, code suggestion, or direct code.</p>
+
+      <label for="problemSelect">Problem</label>
+      <select id="problemSelect"></select>
+      <p id="problemCounter" class="hint-text"></p>
+
+      <button id="previousProblemBtn" type="button" class="secondary">Previous Problem</button>
+      <button id="nextProblemBtn" type="button" class="secondary">Next Problem</button>
 
       <button onclick="askHelper()">Ask Helper</button>
       <button onclick="runTests()" class="secondary">Run Tests</button>
@@ -54,7 +61,7 @@
           <pre id="selectedOptionBox">No option chosen yet.</pre>
 
           <div class="card-header small">
-            <span>Model Choice Counts</span>
+            <span>Filtered Model Choice Counts</span>
           </div>
           <pre id="metricsBox"></pre>
 
@@ -68,6 +75,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
-  <script src="/frontend/app.js?v=20260620_fixed"></script>
+  <script src="/frontend/app.js?v=20260620_model_problem_stats"></script>
 </body>
 </html>

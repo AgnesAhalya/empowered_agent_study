@@ -41,15 +41,10 @@ OPTION_ORDER = [
 ]
 
 
-def canonical_option(value: Optional[object]) -> Optional[str]:
-    """
-    Convert model/front-end option formats into one canonical label.
+HEADERLESS_COMPLETION_FIELDS = COMPLETION_FIELDS
 
-    Important mapping:
-    1 -> concept_suggestion
-    2 -> code_suggestion
-    3 -> direct_code
-    """
+
+def canonical_option(value: Optional[object]) -> Optional[str]:
     if value is None:
         return None
 
@@ -113,10 +108,14 @@ def calculate_percentages(counts: dict) -> dict:
 def option_usage_summary(
     participant_id: Optional[str] = None,
     problem_id: Optional[str] = None,
+    method: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> dict:
     counts = count_option_usage(
         participant_id=participant_id,
         problem_id=problem_id,
+        method=method,
+        model=model,
     )
     total = sum(int(counts.get(option, 0) or 0) for option in OPTION_ORDER)
 
@@ -129,6 +128,13 @@ def option_usage_summary(
 
 def _file_is_empty(path: Path) -> bool:
     return not path.exists() or path.stat().st_size == 0
+
+
+def _matches_filter(row_value: Optional[object], wanted_value: Optional[str]) -> bool:
+    if wanted_value is None or str(wanted_value).strip() == "":
+        return True
+
+    return str(row_value or "").strip() == str(wanted_value).strip()
 
 
 def log_completion(
@@ -165,7 +171,6 @@ def log_completion(
 
 
 def _option_from_raw_response(raw_response: Optional[str]) -> Optional[str]:
-    """Recover the selected option from the model JSON stored in raw_response."""
     if not raw_response:
         return None
 
@@ -190,12 +195,6 @@ def _option_from_raw_response(raw_response: Optional[str]) -> Optional[str]:
 
 
 def _iter_completion_rows(path: Path):
-    """
-    Read both new CSV logs with headers and old headerless logs.
-
-    The uploaded project had a headerless completion_logs.csv, so csv.DictReader
-    treated the first data row as the header and made counts look broken.
-    """
     if not path.exists() or path.stat().st_size == 0:
         return
 
@@ -207,17 +206,23 @@ def _iter_completion_rows(path: Path):
         if has_header:
             reader = csv.DictReader(f)
         else:
-            reader = csv.DictReader(f, fieldnames=COMPLETION_FIELDS)
+            reader = csv.DictReader(f, fieldnames=HEADERLESS_COMPLETION_FIELDS)
 
         for row in reader:
             if not row:
                 continue
+
+            for field in COMPLETION_FIELDS:
+                row.setdefault(field, "")
+
             yield row
 
 
 def count_option_usage(
     participant_id: Optional[str] = None,
     problem_id: Optional[str] = None,
+    method: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> dict:
     path = LOGS_DIR / "completion_logs.csv"
     counts = Counter()
@@ -226,19 +231,22 @@ def count_option_usage(
         return empty_option_counts()
 
     for row in _iter_completion_rows(path):
-        if participant_id and row.get("participant_id") != participant_id:
+        if not _matches_filter(row.get("participant_id"), participant_id):
             continue
 
-        if problem_id and row.get("problem_id") != problem_id:
+        if not _matches_filter(row.get("problem_id"), problem_id):
             continue
 
-        # Prefer the model JSON if available because earlier versions could
-        # write the wrong selected_option column due to the 2/3 mapping bug.
-        selected_option = _option_from_raw_response(row.get("raw_response"))
+        if not _matches_filter(row.get("method"), method):
+            continue
+
+        if not _matches_filter(row.get("model"), model):
+            continue
+
+        selected_option = canonical_option(row.get("selected_option"))
+
         if not selected_option:
-            selected_option = canonical_option(row.get("selected_option"))
-        if not selected_option:
-            selected_option = canonical_option(row.get("method"))
+            selected_option = _option_from_raw_response(row.get("raw_response"))
 
         if selected_option in OPTION_ORDER:
             counts[selected_option] += 1
