@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Soft-Empower Coding Study</title>
+  <link rel="stylesheet" href="/frontend/style.css?v=20260620_fixed">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <h1>Soft-Empower</h1>
+      <p class="subtitle">Coding Study</p>
+
+      <label for="participantId">Participant ID</label>
+      <input id="participantId" value="pilot">
+
+      <label for="method">Assistant condition</label>
+      <select id="method">
+        <option value="normal_selector">Normal LLM selector</option>
+        <option value="empowered_selector">Empowered LLM selector</option>
+      </select>
+      <p class="hint-text">The model chooses: concept suggestion, code suggestion, or direct code.</p>
+
+      <button onclick="askHelper()">Ask Helper</button>
+      <button onclick="runTests()" class="secondary">Run Tests</button>
+      <button onclick="resetCode()" class="danger">Reset Code</button>
+    </aside>
+
+    <main class="main-area">
+      <section class="problem-bar">
+        <div>
+          <h2 id="problemTitle">Loading...</h2>
+          <p id="problemDescription"></p>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="editor-card">
+          <div class="card-header">
+            <span>Your Code</span>
+          </div>
+          <div id="editor"></div>
+        </div>
+
+        <div class="assistant-card">
+          <div class="card-header">
+            <span>Helper Response</span>
+          </div>
+
+          <div id="helperResponse" class="response-box"></div>
+
+          <div class="card-header small">
+            <span>Option Chosen</span>
+          </div>
+          <pre id="selectedOptionBox">No option chosen yet.</pre>
+
+          <div class="card-header small">
+            <span>Model Choice Counts</span>
+          </div>
+          <pre id="metricsBox"></pre>
+
+          <div class="card-header small">
+            <span>Test Results</span>
+          </div>
+          <pre id="testResults"></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="/frontend/app.js?v=20260620_fixed"></script>
+</body>
+</html>
