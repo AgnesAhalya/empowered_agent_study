@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Soft-Empower Coding Study</title>
-  <link rel="stylesheet" href="/frontend/style.css?v=20260620_model_problem_stats">
+  <link rel="stylesheet" href="/frontend/style.css?v=20260629_summary">
 </head>
 <body>
   <div class="app-shell">
@@ -29,6 +29,7 @@
 
       <button onclick="askHelper()">Ask Helper</button>
       <button onclick="runTests()" class="secondary">Run Tests</button>
+      <button onclick="refreshStudySummary()" class="secondary">Refresh Summary</button>
       <button onclick="resetCode()" class="danger">Reset Code</button>
     </aside>
 
@@ -69,12 +70,17 @@
             <span>Test Results</span>
           </div>
           <pre id="testResults"></pre>
+
+          <div class="card-header small">
+            <span>Study Summary: Overall + Problem-wise</span>
+          </div>
+          <pre id="summaryBox">No summary loaded yet.</pre>
         </div>
       </section>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
-  <script src="/frontend/app.js?v=20260620_model_problem_stats"></script>
+  <script src="/frontend/app.js?v=20260629_summary"></script>
 </body>
 </html>

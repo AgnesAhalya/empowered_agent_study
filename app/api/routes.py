@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.assistants.openrouter_client import METHOD_CONFIG, call_openrouter
 from app.config import OPENROUTER_MODEL, PROBLEMS_DIR, SUBMISSIONS_DIR
-from app.core.logger import log_completion, log_submission, option_usage_summary
+from app.core.logger import log_completion, log_submission, option_usage_summary, study_summary
 from app.core.metrics import compute_completion_metrics
 from app.models.schemas import CompletionRequest, CompletionResponse, SubmissionRequest
 from app.runners.runner import run_function_tests
@@ -56,13 +56,59 @@ def option_stats(
     }
 
 
+@router.get("/stats/summary")
+def stats_summary(
+    participant_id: str | None = None,
+    method: str | None = None,
+    model: str | None = None,
+):
+    summary = study_summary(
+        participant_id=participant_id,
+        method=method,
+        model=model,
+    )
+
+    title_by_id = {}
+    for path in PROBLEMS_DIR.glob("*.json"):
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        # Skip metadata files such as study_manifest.json / study_problem_ids.json.
+        if not isinstance(data, dict):
+            continue
+
+        problem_id = data.get("id")
+        if problem_id:
+            title_by_id[problem_id] = data.get("title") or problem_id
+
+    for problem in summary["problems"]:
+        problem_id = problem.get("problem_id")
+        problem["title"] = title_by_id.get(problem_id, problem_id)
+
+    return summary
+
+
 @router.get("/problems")
 def list_problems():
     problems = []
 
     for path in PROBLEMS_DIR.glob("*.json"):
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        # Skip metadata files such as study_manifest.json / study_problem_ids.json.
+        if not isinstance(data, dict):
+            continue
+
+        required_fields = ["id", "title", "description", "starter_code"]
+        if not all(data.get(field) for field in required_fields):
+            continue
 
         problems.append(
             {
@@ -73,6 +119,7 @@ def list_problems():
             }
         )
 
+    problems.sort(key=lambda item: item["id"])
     return {"problems": problems}
 
 

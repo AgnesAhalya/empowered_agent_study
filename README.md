@@ -33,3 +33,4 @@ OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
 
 The frontend file is cache-busted in `index.html`, so the browser should load the new `app.js`. If you still see the old UI, hard refresh with `Cmd + Shift + R` or `Ctrl + Shift + R`.
+

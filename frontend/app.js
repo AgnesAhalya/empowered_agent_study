@@ -1,4 +1,5 @@
 let PROBLEM_IDS = ["palindrome"];
+let PROBLEM_META = {};
 let currentProblemIndex = 0;
 let problemId = PROBLEM_IDS[currentProblemIndex];
 let activeModel = null;
@@ -47,9 +48,17 @@ async function loadProblemIds() {
     }
 
     const data = await response.json();
-    const ids = (data.problems || [])
+    const problems = data.problems || [];
+    const ids = problems
       .map((problem) => problem.id)
       .filter(Boolean);
+
+    PROBLEM_META = {};
+    problems.forEach((problem) => {
+      if (problem.id) {
+        PROBLEM_META[problem.id] = problem;
+      }
+    });
 
     if (ids.length > 0) {
       PROBLEM_IDS = ids;
@@ -149,7 +158,9 @@ function setupProblemControls() {
     PROBLEM_IDS.forEach((id, index) => {
       const option = document.createElement("option");
       option.value = id;
-      option.textContent = `${index + 1}. ${id}`;
+      const meta = PROBLEM_META[id] || {};
+      const title = meta.title || id;
+      option.textContent = `${index + 1}. ${title} (${id})`;
       problemSelect.appendChild(option);
     });
 
@@ -405,6 +416,7 @@ async function loadProblem() {
 
     updateProblemControls();
     await refreshOptionCounts();
+    await refreshStudySummary();
   } catch (error) {
     document.getElementById("problemTitle").textContent = "Problem loading failed";
     document.getElementById("problemDescription").textContent = error.message;
@@ -420,6 +432,7 @@ function resetCode() {
   clearBoxes();
   showSelectedOption(null);
   refreshOptionCounts();
+  refreshStudySummary();
 }
 
 async function refreshOptionCounts() {
@@ -464,6 +477,115 @@ async function refreshOptionCounts() {
   } catch (error) {
     console.error("Could not refresh option counts", error);
     showLocalCounts();
+  }
+}
+
+
+function formatStudySummary(data) {
+  if (!data || !data.overall) {
+    return "No summary available yet.";
+  }
+
+  const overall = data.overall || {};
+  const problems = data.problems || [];
+  const counts = overall.option_counts || {};
+
+  const lines = [];
+
+  lines.push("OVERALL SUMMARY");
+  lines.push("===============");
+  lines.push(`Participant: ${data.participant_id || getParticipantId()}`);
+  lines.push(`Condition: ${data.method || getMethod()}`);
+  lines.push(`Model: ${data.model || activeModel || "all/unknown"}`);
+  lines.push("");
+  lines.push(`Problems attempted: ${overall.attempted_problem_count || 0}`);
+  lines.push(`Problems passed at least once: ${overall.solved_problem_count || 0}`);
+  lines.push(`Problems currently/latest passed: ${overall.latest_passed_problem_count || 0}`);
+  lines.push(`Total helper requests: ${overall.helper_requests || 0}`);
+  lines.push(`Total test runs: ${overall.test_runs || 0}`);
+  lines.push(`Passed test runs: ${overall.passed_test_runs || 0}`);
+  lines.push(`Failed test runs: ${overall.failed_test_runs || 0}`);
+  lines.push(`Average helper response length: ${overall.suggestion_length_avg || 0} chars`);
+  lines.push("");
+  lines.push("Helper option choices:");
+  lines.push(`- Concept suggestion: ${counts.concept_suggestion || 0}`);
+  lines.push(`- Code suggestion: ${counts.code_suggestion || 0}`);
+  lines.push(`- Direct code: ${counts.direct_code || 0}`);
+  lines.push("");
+  lines.push("PROBLEM-WISE SUMMARY");
+  lines.push("====================");
+
+  if (problems.length === 0) {
+    lines.push("No problem activity logged yet.");
+    return lines.join("\n");
+  }
+
+  problems.forEach((problem, index) => {
+    const problemCounts = problem.option_counts || {};
+    const status = problem.passed_once
+      ? "PASSED"
+      : problem.test_runs > 0
+        ? "NOT PASSED"
+        : "NO TEST RUN";
+
+    lines.push(`${index + 1}. ${problem.title || problem.problem_id} (${problem.problem_id})`);
+    lines.push(`   Status: ${status}`);
+    lines.push(`   Helper requests: ${problem.helper_requests || 0}`);
+    lines.push(`   Test runs: ${problem.test_runs || 0}`);
+    lines.push(`   Passed test runs: ${problem.passed_test_runs || 0}`);
+    lines.push(`   Failed test runs: ${problem.failed_test_runs || 0}`);
+    lines.push(
+      `   Options: concept=${problemCounts.concept_suggestion || 0}, ` +
+      `code=${problemCounts.code_suggestion || 0}, ` +
+      `direct=${problemCounts.direct_code || 0}`
+    );
+    lines.push(`   Avg helper length: ${problem.suggestion_length_avg || 0} chars`);
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+async function refreshStudySummary() {
+  const summaryBox = document.getElementById("summaryBox");
+
+  if (!summaryBox) {
+    return;
+  }
+
+  const params = new URLSearchParams({
+    participant_id: getParticipantId(),
+    method: getMethod(),
+  });
+
+  if (activeModel) {
+    params.set("model", activeModel);
+  }
+
+  try {
+    const response = await fetch(`/stats/summary?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch (error) {
+        errorText = "";
+      }
+
+      summaryBox.textContent =
+        `Summary endpoint failed: HTTP ${response.status}
+` +
+        `${errorText || "Check backend logs for details."}`;
+      return;
+    }
+
+    const data = await response.json();
+    summaryBox.textContent = formatStudySummary(data);
+  } catch (error) {
+    summaryBox.textContent = `Could not load summary: ${error.message}`;
   }
 }
 
@@ -576,6 +698,7 @@ async function runTests() {
   );
 
   await refreshOptionCounts();
+  await refreshStudySummary();
 }
 
 window.askHelper = askHelper;
@@ -583,6 +706,7 @@ window.runTests = runTests;
 window.resetCode = resetCode;
 window.nextProblem = nextProblem;
 window.previousProblem = previousProblem;
+window.refreshStudySummary = refreshStudySummary;
 
 require.config({
   paths: {
@@ -611,11 +735,17 @@ require(["vs/editor/editor.main"], async function () {
   const methodSelect = document.getElementById("method");
 
   if (participantInput) {
-    participantInput.addEventListener("input", refreshOptionCounts);
+    participantInput.addEventListener("input", function () {
+      refreshOptionCounts();
+      refreshStudySummary();
+    });
   }
 
   if (methodSelect) {
-    methodSelect.addEventListener("change", refreshOptionCounts);
+    methodSelect.addEventListener("change", function () {
+      refreshOptionCounts();
+      refreshStudySummary();
+    });
   }
 
   await loadActiveModel();

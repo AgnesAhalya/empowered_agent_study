@@ -1,0 +1,10 @@
+.env
+.venv
+.venv-selenium
+logs
+submissions
+selenium_runs
+__pycache__
+*.pyc
+.git
+.DS_Store

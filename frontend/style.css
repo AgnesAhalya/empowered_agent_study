@@ -196,3 +196,8 @@ pre {
   font-size: 12px;
   line-height: 1.35;
 }
+
+#summaryBox {
+  min-height: 180px;
+  max-height: 320px;
+}
